@@ -17,7 +17,7 @@
 from typing import Optional, Union
 
 import torch
-from functorch import jacrev, vmap
+from torch.func import jacrev, vmap
 from torch import nn
 from torchtyping import TensorType
 
