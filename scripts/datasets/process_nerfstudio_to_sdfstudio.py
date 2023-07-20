@@ -22,12 +22,32 @@ def main(args):
     cam_params = json.load(open(input_dir / "transforms.json"))
 
     # === load camera intrinsics and poses ===
+    print('read intrinsics')
     cam_intrinsics = []
     if args.data_type == "colmap":
-        cam_intrinsics.append(np.array([
-            [cam_params["fl_x"], 0, cam_params["cx"]],
-            [0, cam_params["fl_y"], cam_params["cy"]],
-            [0, 0, 1]]))
+        if 'fl_x' in cam_params:
+            cam_intrinsics.append(np.array([
+                [cam_params["fl_x"], 0, cam_params["cx"]],
+                [0, cam_params["fl_y"], cam_params["cy"]],
+                [0, 0, 1]]))
+        else:
+            #TODO: this script doens't handle the multi-camera case. To an averaging for now.
+            # intrinsics_buffer = np.zeros([4])
+            for frame in cam_params['frames']:
+                # intrinsics_buffer[0] += frame['fl_x']
+                # intrinsics_buffer[1] += frame['fl_y']
+                # intrinsics_buffer[2] += frame['cx']
+                # intrinsics_buffer[3] += frame['cy']
+                cam_intrinsics.append(np.array([
+                    [frame["fl_x"], 0, frame["cx"]],
+                    [0, frame["fl_y"], frame["cy"]],
+                    [0, 0, 1]]))
+            # intrinsics_buffer /= len(cam_params['frames'])
+            # cam_intrinsics.append(np.array([
+            #     [intrinsics_buffer[0], 0, intrinsics_buffer[2]],
+            #     [0, intrinsics_buffer[1], intrinsics_buffer[3]],
+            #     [0, 0, 1]]))
+            
 
     frames = cam_params["frames"]
     poses = []
@@ -35,6 +55,7 @@ def main(args):
     depth_paths = []
     # only load images with corresponding pose info
     # currently in random order??, probably need to sort
+    print('load and convert poses')
     for frame in frames:
         # load intrinsics from polycam
         if args.data_type == "polycam":
@@ -74,24 +95,27 @@ def main(args):
     max_vertices = poses[:, :3, 3][valid_poses].max(axis=0)
 
     # === Normalize the scene ===
-    if args.scene_type in ["indoor", "object"]:
-        # Enlarge bbox by 1.05 for object scene and by 5.0 for indoor scene
-        # TODO: Adaptively estimate `scene_scale_mult` based on depth-map or point-cloud prior
-        if not args.scene_scale_mult:
-            args.scene_scale_mult = 1.05 if args.scene_type == "object" else 5.0
-        scene_scale = 2.0 / (np.max(max_vertices - min_vertices) * args.scene_scale_mult)
-        scene_center = (min_vertices + max_vertices) / 2.0
-        # normalize pose to unit cube
-        poses[:, :3, 3] -= scene_center
-        poses[:, :3, 3] *= scene_scale
-        # calculate scale matrix
-        scale_mat = np.eye(4).astype(np.float32)
-        scale_mat[:3, 3] -= scene_center
-        scale_mat[:3] *= scene_scale
-        scale_mat = np.linalg.inv(scale_mat)
-    else:
-        scene_scale = 1.0
-        scale_mat = np.eye(4).astype(np.float32)
+    # print('normalize the scene')
+    # if args.scene_type in ["indoor", "object"]:
+    #     # Enlarge bbox by 1.05 for object scene and by 5.0 for indoor scene
+    #     # TODO: Adaptively estimate `scene_scale_mult` based on depth-map or point-cloud prior
+    #     if not args.scene_scale_mult:
+    #         args.scene_scale_mult = 1.05 if args.scene_type == "object" else 5.0
+    #     scene_scale = 2.0 / (np.max(max_vertices - min_vertices) * args.scene_scale_mult)
+    #     scene_center = (min_vertices + max_vertices) / 2.0
+    #     # normalize pose to unit cube
+    #     poses[:, :3, 3] -= scene_center
+    #     poses[:, :3, 3] *= scene_scale
+    #     # calculate scale matrix
+    #     scale_mat = np.eye(4).astype(np.float32)
+    #     scale_mat[:3, 3] -= scene_center
+    #     scale_mat[:3] *= scene_scale
+    #     scale_mat = np.linalg.inv(scale_mat)
+    # else:
+    #     scene_scale = 1.0
+    #     scale_mat = np.eye(4).astype(np.float32)
+    scene_scale = 1.0
+    scale_mat = np.eye(4).astype(np.float32)
 
     # === Construct the scene box ===
     if args.scene_type == "indoor":
@@ -161,13 +185,19 @@ def main(args):
         depth_trans = transforms.Compose([])
 
     # === Construct the frames in the meta_data.json ===
+    print("Construct the frames in the meta_data.json")
     frames = []
-    out_index = 0
+    # out_index = 0
     for idx, (valid, pose, image_path) in enumerate(tqdm(zip(valid_poses, poses, image_paths))):
         if not valid:
             continue
 
         # save rgb image
+        out_index = int(os.path.basename(image_path).split('.')[0])
+        # print(out_index)
+        # import sys
+        # sys.exit()
+        
         out_img_path = output_dir / f"{out_index:06d}_rgb.png"
         img = Image.open(image_path)
         img_tensor = rgb_trans(img)
@@ -177,7 +207,7 @@ def main(args):
         frame = {
             "rgb_path": rgb_path,
             "camtoworld": pose.tolist(),
-            "intrinsics": cam_intrinsics[0].tolist() if args.data_type == "colmap" else cam_intrinsics[idx].tolist()
+            "intrinsics": cam_intrinsics[0].tolist() if len(cam_intrinsics) == 1 else cam_intrinsics[idx].tolist()
         }
 
         if args.sensor_depth:
@@ -198,9 +228,12 @@ def main(args):
         if args.mono_prior:
             frame["mono_depth_path"] = rgb_path.replace("_rgb.png", "_depth.npy")
             frame["mono_normal_path"] = rgb_path.replace("_rgb.png", "_normal.npy")
+            
+        if args.foreground_mask:
+            frame["foreground_mask"] = rgb_path.replace("_rgb.png", "_foreground_mask.png")
 
         frames.append(frame)
-        out_index += 1
+        # out_index += 1
 
     # === Construct and export the metadata ===
     meta_data = {
@@ -209,7 +242,7 @@ def main(args):
         "width": tar_w,
         "has_mono_prior": args.mono_prior,
         "has_sensor_depth": args.sensor_depth,
-        "has_foreground_mask": False,
+        "has_foreground_mask": args.foreground_mask,
         "pairs": None,
         "worldtogt": scale_mat.tolist(),
         "scene_box": scene_box,
@@ -261,6 +294,8 @@ if __name__ == "__main__":
     parser.add_argument("--mono-prior", dest="mono_prior", action="store_true",
                         help="Whether to generate mono-prior depths and normals. "
                              "If enabled, the images will be cropped to 384*384")
+    parser.add_argument("--foreground-mask", dest="foreground_mask", action="store_true",
+                        help="If enabled, the foreground mask will be filled.")
     parser.add_argument("--crop-mult", dest="crop_mult", type=int, default=1,
                         help="image size will be resized to crop_mult*384, only take effect when enabling mono-prior")
     parser.add_argument("--omnidata-path", dest="omnidata_path",
