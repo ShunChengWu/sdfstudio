@@ -196,16 +196,16 @@ def main(args):
             continue
 
         # save rgb image
-        out_index = int(os.path.basename(image_path).split('.')[0])
-        # print(out_index)
-        # import sys
-        # sys.exit()
+        # out_index = int(os.path.basename(image_path).split('.')[0])
+        out_name = os.path.basename(image_path).split('.')[0]
 
-        out_img_path = output_dir / f"{out_index:06d}_rgb.png"
-        img = Image.open(image_path)
-        img_tensor = rgb_trans(img)
-        img_tensor.save(out_img_path)
-        rgb_path = str(out_img_path.relative_to(output_dir))
+        # out_img_path = output_dir / f"{out_index:06d}_rgb.png"
+        # img = Image.open(image_path)
+        # img_tensor = rgb_trans(img)
+        # img_tensor.save(out_img_path)
+        # str(image_path.relative_to(output_dir))
+        rgb_path = os.path.relpath(image_path, output_dir)
+        # rgb_path = str(out_img_path.relative_to(output_dir))
 
         frame = {
             "rgb_path": rgb_path,
@@ -216,7 +216,8 @@ def main(args):
         if args.sensor_depth:
             # load depth
             depth_path = depth_paths[idx]
-            out_depth_path = output_dir / f"{out_index:06d}_sensor_depth.png"
+            # out_depth_path = output_dir / f"{out_index:06d}_sensor_depth.png"
+            out_depth_path = output_dir / f"{out_name}_sensor_depth.png"
             depth = cv2.imread(str(depth_path), -1).astype(np.float32) / 1000.0
             depth_PIL = Image.fromarray(depth)
             new_depth = depth_trans(depth_PIL)
@@ -226,18 +227,26 @@ def main(args):
             plt.imsave(out_depth_path, new_depth, cmap="viridis")
             np.save(str(out_depth_path).replace(".png", ".npy"), new_depth)
 
+            # frame["sensor_depth_path"] = rgb_path.replace(
+            #     "_rgb.png", "_sensor_depth.npy")
             frame["sensor_depth_path"] = rgb_path.replace(
-                "_rgb.png", "_sensor_depth.npy")
+                ".png", "_sensor_depth.npy")
 
         if args.mono_prior:
+            # frame["mono_depth_path"] = rgb_path.replace(
+            #     "_rgb.png", "_depth.npy")
+            # frame["mono_normal_path"] = rgb_path.replace(
+            #     "_rgb.png", "_normal.npy")
             frame["mono_depth_path"] = rgb_path.replace(
-                "_rgb.png", "_depth.npy")
+                ".png", "_depth.npy")
             frame["mono_normal_path"] = rgb_path.replace(
-                "_rgb.png", "_normal.npy")
+                ".png", "_normal.npy")
 
         if args.foreground_mask:
+            # frame["foreground_mask"] = rgb_path.replace(
+            #     "_rgb.png", "_foreground_mask.png")
             frame["foreground_mask"] = rgb_path.replace(
-                "_rgb.png", "_foreground_mask.png")
+                ".png", "_foreground_mask.png")
 
         frames.append(frame)
         # out_index += 1
