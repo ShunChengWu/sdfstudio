@@ -4,37 +4,39 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
-    // {
-    //   "name": "Python: train mv-volsdf",
-    //   "type": "python",
-    //   "request": "launch",
-    //   "program": "scripts/extract_mesh.py",
-    //   "console": "integratedTerminal",
-    //   "args": [
-    //     "--load-config", 
-    //     "outputs/neus-facto-CarCTs0.5fps2/neus-facto/2023-07-21_012326/config.yml",
-    //     "--output-path", 
-    //     "meshes/bmwct/neus-facto-test.ply",
-    //     "--resolution", "512",
-    //     "--bounding-box-min", "-3.8299505968249683","-3.212701224768195","-0.1408882449364786",
-    //     "--bounding-box-max", "5.07212145560551","2.627098055701465","2.3582949946141025"
-    //   ]
-    // },
-
     {
-      "name": "Python: convert nerfstudio to sdfstudio",
+      "name": "Python: train mv-volsdf",
       "type": "python",
       "request": "launch",
-      "program": "scripts/datasets/process_nerfstudio_to_sdfstudio.py",
+      "program": "scripts/extract_mesh.py",
       "console": "integratedTerminal",
       "args": [
-        "--data","~/data/bmw_carCT/s0.2fps1/hloc_pose/sfm/",
-        "--data-type","colmap",
-        "--scene-type","indoor",
-        "--output-dir","~/data/bmw_carCT/s0.2fps1/sdfstudio/",
-        "--foreground-mask"
+        "--load-config",
+        "outputs/carCTs0.2fps1_unbound/neus-facto/2023-07-24_152826/config.yml",
+        "--output-path", 
+        "meshes/bmwct-s0.2fps1/neus-facto-unbound_square.ply",
+        "--bounding-box-max", "4", "4", "4", 
+        "--bounding-box-min", "-4", "-4", "-4",
+        "--resolution", "512",
+        // "--create_visibility_mask" ,"True"
       ]
     },
+
+    // {
+    //   "name": "Python: convert nerfstudio to sdfstudio",
+    //   "type": "python",
+    //   "request": "launch",
+    //   "program": "scripts/datasets/process_nerfstudio_to_sdfstudio.py",
+    //   "console": "integratedTerminal",
+    //   "args": [
+    //     "--data","~/data/bmw_carCT/s0.2fps1/hloc_pose/sfm/",
+    //     "--data-type","colmap",
+    //     "--scene-type","unbound",
+    //     "--output-dir","~/data/bmw_carCT/s0.2fps1/sdfstudio_unbound_mono/",
+    //     "--foreground-mask",
+    //     // "--mono-prior"
+    //   ]
+    // },
 
     // {
     //   "name": "Launch Chrome against localhost",

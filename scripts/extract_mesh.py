@@ -77,16 +77,19 @@ class ExtractMesh:
             )
 
             def inv_contract(x):
-                mag = torch.linalg.norm(x, ord=pipeline.model.scene_contraction.order, dim=-1)
+                mag = torch.linalg.norm(
+                    x, ord=pipeline.model.scene_contraction.order, dim=-1)
                 mask = mag >= 1
                 x_new = x.clone()
-                x_new[mask] = (1 / (2 - mag[mask][..., None])) * (x[mask] / mag[mask][..., None])
+                x_new[mask] = (1 / (2 - mag[mask][..., None])) * \
+                    (x[mask] / mag[mask][..., None])
                 return x_new
 
             if self.save_visibility_grid:
                 offset = torch.linspace(-2.0, 2.0, 512)
                 x, y, z = torch.meshgrid(offset, offset, offset, indexing="ij")
-                offset_cube = torch.stack([x, y, z], dim=-1).reshape(-1, 3).to(coarse_mask.device)
+                offset_cube = torch.stack(
+                    [x, y, z], dim=-1).reshape(-1, 3).to(coarse_mask.device)
                 points = offset_cube[coarse_mask.reshape(-1) > 0]
                 points = inv_contract(points)
                 save_points("mask.ply", points.cpu().numpy())
@@ -94,7 +97,8 @@ class ExtractMesh:
 
             get_surface_sliding_with_contraction(
                 sdf=lambda x: (
-                    pipeline.model.field.forward_geonetwork(x)[:, 0] - self.marching_cube_threshold
+                    pipeline.model.field.forward_geonetwork(
+                        x)[:, 0] - self.marching_cube_threshold
                 ).contiguous(),
                 resolution=self.resolution,
                 bounding_box_min=self.bounding_box_min,
@@ -110,7 +114,9 @@ class ExtractMesh:
             # for unisurf
             get_surface_occupancy(
                 occupancy_fn=lambda x: torch.sigmoid(
-                    10 * pipeline.model.field.forward_geonetwork(x)[:, 0].contiguous()
+                    10 *
+                    pipeline.model.field.forward_geonetwork(
+                        x)[:, 0].contiguous()
                 ),
                 resolution=self.resolution,
                 bounding_box_min=self.bounding_box_min,
@@ -120,16 +126,27 @@ class ExtractMesh:
                 output_path=self.output_path,
             )
         else:
+            def inv_contract(x):
+                mag = torch.linalg.norm(
+                    x, ord=pipeline.model.scene_contraction.order, dim=-1)
+                mask = mag >= 1
+                x_new = x.clone()
+                x_new[mask] = (1 / (2 - mag[mask][..., None])) * \
+                    (x[mask] / mag[mask][..., None])
+                return x_new
+
             assert self.resolution % 512 == 0
             # for sdf we can multi-scale extraction.
             get_surface_sliding(
-                sdf=lambda x: pipeline.model.field.forward_geonetwork(x)[:, 0].contiguous(),
+                sdf=lambda x: pipeline.model.field.forward_geonetwork(x)[
+                    :, 0].contiguous(),
                 resolution=self.resolution,
                 bounding_box_min=self.bounding_box_min,
                 bounding_box_max=self.bounding_box_max,
                 coarse_mask=pipeline.model.scene_box.coarse_binary_gird,
                 output_path=self.output_path,
                 simplify_mesh=self.simplify_mesh,
+                inv_contraction=inv_contract
             )
 
 
@@ -143,4 +160,6 @@ if __name__ == "__main__":
     entrypoint()
 
 # For sphinx docs
-get_parser_fn = lambda: tyro.extras.get_parser(ExtractMesh)  # noqa
+
+
+def get_parser_fn(): return tyro.extras.get_parser(ExtractMesh)  # noqa

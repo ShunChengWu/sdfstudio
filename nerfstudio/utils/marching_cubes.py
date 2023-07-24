@@ -22,6 +22,8 @@ def get_surface_sliding(
     coarse_mask=None,
     output_path: Path = Path("test.ply"),
     simplify_mesh=True,
+    inv_contraction=None,
+    max_range=32.0
 ):
     assert resolution % 512 == 0
     if coarse_mask is not None:
@@ -56,7 +58,8 @@ def get_surface_sliding(
                 z = np.linspace(z_min, z_max, cropN)
 
                 xx, yy, zz = np.meshgrid(x, y, z, indexing="ij")
-                points = torch.tensor(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T, dtype=torch.float).cuda()
+                points = torch.tensor(
+                    np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T, dtype=torch.float).cuda()
 
                 def evaluate(points):
                     z = []
@@ -66,11 +69,14 @@ def get_surface_sliding(
                     return z
 
                 # construct point pyramids
-                points = points.reshape(cropN, cropN, cropN, 3).permute(3, 0, 1, 2)
+                points = points.reshape(
+                    cropN, cropN, cropN, 3).permute(3, 0, 1, 2)
+
                 if coarse_mask is not None:
                     # breakpoint()
                     points_tmp = points.permute(1, 2, 3, 0)[None].cuda()
-                    current_mask = torch.nn.functional.grid_sample(coarse_mask, points_tmp)
+                    current_mask = torch.nn.functional.grid_sample(
+                        coarse_mask, points_tmp)
                     current_mask = (current_mask > 0.0).cpu().numpy()[0, 0]
                 else:
                     current_mask = None
@@ -93,10 +99,12 @@ def get_surface_sliding(
                         if coarse_mask is not None:
                             pts_sdf = torch.ones_like(pts[:, 1])
                             valid_mask = (
-                                torch.nn.functional.grid_sample(coarse_mask, pts[None, None, None])[0, 0, 0, 0] > 0
+                                torch.nn.functional.grid_sample(coarse_mask, pts[None, None, None])[
+                                    0, 0, 0, 0] > 0
                             )
                             if valid_mask.any():
-                                pts_sdf[valid_mask] = evaluate(pts[valid_mask].contiguous())
+                                pts_sdf[valid_mask] = evaluate(
+                                    pts[valid_mask].contiguous())
                         else:
                             pts_sdf = evaluate(pts)
                     else:
@@ -111,14 +119,20 @@ def get_surface_sliding(
                     if pid < 3:
                         # update mask
                         mask = torch.abs(pts_sdf) < threshold
-                        mask = mask.reshape(coarse_N, coarse_N, coarse_N)[None, None]
+                        mask = mask.reshape(coarse_N, coarse_N, coarse_N)[
+                            None, None]
                         mask = upsample(mask.float()).bool()
 
-                        pts_sdf = pts_sdf.reshape(coarse_N, coarse_N, coarse_N)[None, None]
+                        pts_sdf = pts_sdf.reshape(
+                            coarse_N, coarse_N, coarse_N)[None, None]
                         pts_sdf = upsample(pts_sdf)
                         pts_sdf = pts_sdf.reshape(-1)
 
                     threshold /= 2.0
+
+                # pts = points_pyramid[-1].reshape(3, -
+                #                                  1).permute(1, 0).contiguous()
+                # pts_sdf = evaluate(pts)
 
                 z = pts_sdf.detach().cpu().numpy()
 
@@ -131,7 +145,8 @@ def get_surface_sliding(
                 if not (np.min(z) > level or np.max(z) < level):
                     z = z.astype(np.float32)
                     verts, faces, normals, _ = measure.marching_cubes(
-                        volume=z.reshape(cropN, cropN, cropN),  # .transpose([1, 0, 2]),
+                        # .transpose([1, 0, 2]),
+                        volume=z.reshape(cropN, cropN, cropN),
                         level=level,
                         spacing=(
                             (x_max - x_min) / (cropN - 1),
@@ -150,6 +165,13 @@ def get_surface_sliding(
                     meshes.append(meshcrop)
 
     combined = trimesh.util.concatenate(meshes)
+    combined.merge_vertices(digits_vertex=6)
+
+    # inverse contraction and clipping the points range
+    if inv_contraction is not None:
+        combined.vertices = inv_contraction(
+            torch.from_numpy(combined.vertices)).numpy()
+        combined.vertices = np.clip(combined.vertices, -max_range, max_range)
 
     if return_mesh:
         return combined
@@ -186,7 +208,8 @@ def get_surface_occupancy(
     zs = np.linspace(grid_min[2], grid_max[2], N)
 
     xx, yy, zz = np.meshgrid(xs, ys, zs, indexing="ij")
-    points = torch.tensor(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T, dtype=torch.float).to(device=device)
+    points = torch.tensor(np.vstack(
+        [xx.ravel(), yy.ravel(), zz.ravel()]).T, dtype=torch.float).to(device=device)
 
     def evaluate(points):
         z = []
@@ -258,7 +281,8 @@ def get_surface_sliding_with_contraction(
                 z = np.linspace(z_min, z_max, cropN)
 
                 xx, yy, zz = np.meshgrid(x, y, z, indexing="ij")
-                points = torch.tensor(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T, dtype=torch.float).cuda()
+                points = torch.tensor(
+                    np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T, dtype=torch.float).cuda()
 
                 @torch.no_grad()
                 def evaluate(points):
@@ -272,8 +296,10 @@ def get_surface_sliding_with_contraction(
                 points = points.reshape(cropN, cropN, cropN, 3)
 
                 # query coarse grids
-                points_tmp = points[None].cuda() * 0.5  # normalize from [-2, 2] to [-1, 1]
-                current_mask = torch.nn.functional.grid_sample(coarse_mask, points_tmp)
+                # normalize from [-2, 2] to [-1, 1]
+                points_tmp = points[None].cuda() * 0.5
+                current_mask = torch.nn.functional.grid_sample(
+                    coarse_mask, points_tmp)
 
                 points = points.reshape(-1, 3)
                 valid_mask = current_mask.reshape(-1) > 0
@@ -287,9 +313,11 @@ def get_surface_sliding_with_contraction(
                     pts_sdf[valid_mask.reshape(-1)] = pts_sdf_eval
 
                 # use min_pooling to remove masked marching cube artefacts
-                min_sdf = max_pool_3d(pts_sdf.reshape(1, 1, cropN, cropN, cropN) * -1.0) * -1.0
+                min_sdf = max_pool_3d(pts_sdf.reshape(
+                    1, 1, cropN, cropN, cropN) * -1.0) * -1.0
                 min_mask = (current_mask > 0.0).float()
-                pts_sdf = pts_sdf.reshape(1, 1, cropN, cropN, cropN) * min_mask + min_sdf * (1.0 - min_mask)
+                pts_sdf = pts_sdf.reshape(
+                    1, 1, cropN, cropN, cropN) * min_mask + min_sdf * (1.0 - min_mask)
 
                 z = pts_sdf.detach().cpu().numpy()
 
@@ -303,7 +331,8 @@ def get_surface_sliding_with_contraction(
                 if not (np.min(z) > level or np.max(z) < level):
                     z = z.astype(np.float32)
                     verts, faces, normals, _ = measure.marching_cubes(
-                        volume=z.reshape(cropN, cropN, cropN),  # .transpose([1, 0, 2]),
+                        # .transpose([1, 0, 2]),
+                        volume=z.reshape(cropN, cropN, cropN),
                         level=level,
                         spacing=(
                             (x_max - x_min) / (cropN - 1),
@@ -322,7 +351,8 @@ def get_surface_sliding_with_contraction(
 
     # inverse contraction and clipping the points range
     if inv_contraction is not None:
-        combined.vertices = inv_contraction(torch.from_numpy(combined.vertices)).numpy()
+        combined.vertices = inv_contraction(
+            torch.from_numpy(combined.vertices)).numpy()
         combined.vertices = np.clip(combined.vertices, -max_range, max_range)
 
     if return_mesh:
