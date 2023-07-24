@@ -321,7 +321,8 @@ class VanillaDataManager(DataManager):  # pylint: disable=abstract-method
         self.local_rank = local_rank
         self.sampler = None
         self.test_mode = test_mode
-        self.test_split = "test" if test_mode in ["test", "inference"] else "val"
+        self.test_split = "test" if test_mode in [
+            "test", "inference"] else "val"
         self.dataparser = self.config.dataparser.setup()
 
         self.train_dataset = self.create_train_dataset()
@@ -331,14 +332,16 @@ class VanillaDataManager(DataManager):  # pylint: disable=abstract-method
     def create_train_dataset(self) -> InputDataset:
         """Sets up the data loaders for training"""
         return GeneralizedDataset(
-            dataparser_outputs=self.dataparser.get_dataparser_outputs(split="train"),
+            dataparser_outputs=self.dataparser.get_dataparser_outputs(
+                split="train"),
             scale_factor=self.config.camera_res_scale_factor,
         )
 
     def create_eval_dataset(self) -> InputDataset:
         """Sets up the data loaders for evaluation"""
         return GeneralizedDataset(
-            dataparser_outputs=self.dataparser.get_dataparser_outputs(split=self.test_split),
+            dataparser_outputs=self.dataparser.get_dataparser_outputs(
+                split=self.test_split),
             scale_factor=self.config.camera_res_scale_factor,
         )
 
@@ -352,7 +355,8 @@ class VanillaDataManager(DataManager):  # pylint: disable=abstract-method
             return EquirectangularPixelSampler(*args, **kwargs)
         # Otherwise, use the default pixel sampler
         if is_equirectangular.any():
-            CONSOLE.print("[bold yellow]Warning: Some cameras are equirectangular, but using default pixel sampler.")
+            CONSOLE.print(
+                "[bold yellow]Warning: Some cameras are equirectangular, but using default pixel sampler.")
         return PixelSampler(*args, **kwargs)
 
     def setup_train(self):
@@ -369,7 +373,8 @@ class VanillaDataManager(DataManager):  # pylint: disable=abstract-method
             collate_fn=self.config.collate_fn,
         )
         self.iter_train_image_dataloader = iter(self.train_image_dataloader)
-        self.train_pixel_sampler = self._get_pixel_sampler(self.train_dataset, self.config.train_num_rays_per_batch)
+        self.train_pixel_sampler = self._get_pixel_sampler(
+            self.train_dataset, self.config.train_num_rays_per_batch)
         self.train_camera_optimizer = self.config.camera_optimizer.setup(
             num_cameras=self.train_dataset.cameras.size, device=self.device
         )
@@ -399,10 +404,12 @@ class VanillaDataManager(DataManager):  # pylint: disable=abstract-method
             collate_fn=self.config.collate_fn,
         )
         self.iter_eval_image_dataloader = iter(self.eval_image_dataloader)
-        self.eval_pixel_sampler = self._get_pixel_sampler(self.eval_dataset, self.config.eval_num_rays_per_batch)
+        self.eval_pixel_sampler = self._get_pixel_sampler(
+            self.eval_dataset, self.config.eval_num_rays_per_batch)
         self.eval_ray_generator = RayGenerator(
             self.eval_dataset.cameras.to(self.device),
-            self.train_camera_optimizer,  # should be shared between train and eval.
+            # should be shared between train and eval.
+            self.train_camera_optimizer,
         )
         # for loading full images
         self.fixed_indices_eval_dataloader = FixedIndicesEvalDataloader(
@@ -440,9 +447,11 @@ class VanillaDataManager(DataManager):  # pylint: disable=abstract-method
     def next_eval_image(self, step: int) -> Tuple[int, RayBundle, Dict]:
         for camera_ray_bundle, batch in self.eval_dataloader:
             assert camera_ray_bundle.camera_indices is not None
-            if isinstance(batch["image"], BasicImages):  # If this is a generalized dataset, we need to get image tensor
+            # If this is a generalized dataset, we need to get image tensor
+            if isinstance(batch["image"], BasicImages):
                 batch["image"] = batch["image"].images[0]
-                camera_ray_bundle = camera_ray_bundle.reshape((*batch["image"].shape[:-1], 1))
+                camera_ray_bundle = camera_ray_bundle.reshape(
+                    (*batch["image"].shape[:-1], 1))
             image_idx = int(camera_ray_bundle.camera_indices[0, 0, 0])
             return image_idx, camera_ray_bundle, batch
         raise ValueError("No more eval images")

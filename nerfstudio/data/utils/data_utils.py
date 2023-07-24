@@ -59,6 +59,11 @@ def create_masked_img(img_filepath: Path, mask_filepath: Path, output_dir: Path)
     Utility function to mask an image using provided mask and store it on disk.
     Output_dir is absolute path where to store the masked image.
     """
+    masked_image_filename = output_dir / \
+        (img_filepath.stem + "_masked" + img_filepath.suffix)
+
+    if os.path.isfile(output_dir / (img_filepath.stem + "_masked" + img_filepath.suffix)):
+        return masked_image_filename
     img = np.array(Image.open(img_filepath), dtype=np.float32)
     mask = np.array(Image.open(mask_filepath), dtype=np.float32) / 255.0
     assert len(img.shape) == 3
@@ -68,7 +73,6 @@ def create_masked_img(img_filepath: Path, mask_filepath: Path, output_dir: Path)
         mask = mask[..., np.newaxis]
 
     masked_image = Image.fromarray((img * mask).astype(np.uint8))
-    masked_image_filename = output_dir / (img_filepath.stem + "_masked" + img_filepath.suffix)
     masked_image.save(masked_image_filename)
 
     return masked_image_filename

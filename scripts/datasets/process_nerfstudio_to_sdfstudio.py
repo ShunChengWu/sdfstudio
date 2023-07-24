@@ -31,7 +31,7 @@ def main(args):
                 [0, cam_params["fl_y"], cam_params["cy"]],
                 [0, 0, 1]]))
         else:
-            #TODO: this script doens't handle the multi-camera case. To an averaging for now.
+            # TODO: this script doens't handle the multi-camera case. To an averaging for now.
             # intrinsics_buffer = np.zeros([4])
             for frame in cam_params['frames']:
                 # intrinsics_buffer[0] += frame['fl_x']
@@ -47,7 +47,6 @@ def main(args):
             #     [intrinsics_buffer[0], 0, intrinsics_buffer[2]],
             #     [0, intrinsics_buffer[1], intrinsics_buffer[3]],
             #     [0, 0, 1]]))
-            
 
     frames = cam_params["frames"]
     poses = []
@@ -74,7 +73,8 @@ def main(args):
 
         # load images
         file_path = Path(frame["file_path"])
-        img_path = input_dir / "images" / file_path.name
+        img_path = Path(os.path.abspath(os.path.join(input_dir, file_path)))
+        # img_path = input_dir / "images" / file_path.name
         assert img_path.exists()
         image_paths.append(img_path)
 
@@ -95,27 +95,28 @@ def main(args):
     max_vertices = poses[:, :3, 3][valid_poses].max(axis=0)
 
     # === Normalize the scene ===
-    # print('normalize the scene')
-    # if args.scene_type in ["indoor", "object"]:
-    #     # Enlarge bbox by 1.05 for object scene and by 5.0 for indoor scene
-    #     # TODO: Adaptively estimate `scene_scale_mult` based on depth-map or point-cloud prior
-    #     if not args.scene_scale_mult:
-    #         args.scene_scale_mult = 1.05 if args.scene_type == "object" else 5.0
-    #     scene_scale = 2.0 / (np.max(max_vertices - min_vertices) * args.scene_scale_mult)
-    #     scene_center = (min_vertices + max_vertices) / 2.0
-    #     # normalize pose to unit cube
-    #     poses[:, :3, 3] -= scene_center
-    #     poses[:, :3, 3] *= scene_scale
-    #     # calculate scale matrix
-    #     scale_mat = np.eye(4).astype(np.float32)
-    #     scale_mat[:3, 3] -= scene_center
-    #     scale_mat[:3] *= scene_scale
-    #     scale_mat = np.linalg.inv(scale_mat)
-    # else:
-    #     scene_scale = 1.0
-    #     scale_mat = np.eye(4).astype(np.float32)
-    scene_scale = 1.0
-    scale_mat = np.eye(4).astype(np.float32)
+    print('normalize the scene')
+    if args.scene_type in ["indoor", "object"]:
+        # Enlarge bbox by 1.05 for object scene and by 5.0 for indoor scene
+        # TODO: Adaptively estimate `scene_scale_mult` based on depth-map or point-cloud prior
+        if not args.scene_scale_mult:
+            args.scene_scale_mult = 1.05 if args.scene_type == "object" else 5.0
+        scene_scale = 2.0 / \
+            (np.max(max_vertices - min_vertices) * args.scene_scale_mult)
+        scene_center = (min_vertices + max_vertices) / 2.0
+        # normalize pose to unit cube
+        poses[:, :3, 3] -= scene_center
+        poses[:, :3, 3] *= scene_scale
+        # calculate scale matrix
+        scale_mat = np.eye(4).astype(np.float32)
+        scale_mat[:3, 3] -= scene_center
+        scale_mat[:3] *= scene_scale
+        scale_mat = np.linalg.inv(scale_mat)
+    else:
+        scene_scale = 1.0
+        scale_mat = np.eye(4).astype(np.float32)
+    # scene_scale = 1.0
+    # scale_mat = np.eye(4).astype(np.float32)
 
     # === Construct the scene box ===
     if args.scene_type == "indoor":
@@ -156,14 +157,16 @@ def main(args):
         rgb_trans = transforms.Compose(
             [
                 transforms.CenterCrop(target_crop),
-                transforms.Resize((tar_h, tar_w), interpolation=PIL.Image.BILINEAR)
+                transforms.Resize(
+                    (tar_h, tar_w), interpolation=PIL.Image.BILINEAR)
             ]
         )
         depth_trans = transforms.Compose(
             [
                 transforms.Resize((h, w), interpolation=PIL.Image.NEAREST),
                 transforms.CenterCrop(target_crop),
-                transforms.Resize((tar_h, tar_w), interpolation=PIL.Image.NEAREST)
+                transforms.Resize(
+                    (tar_h, tar_w), interpolation=PIL.Image.NEAREST)
             ]
         )
 
@@ -197,7 +200,7 @@ def main(args):
         # print(out_index)
         # import sys
         # sys.exit()
-        
+
         out_img_path = output_dir / f"{out_index:06d}_rgb.png"
         img = Image.open(image_path)
         img_tensor = rgb_trans(img)
@@ -223,14 +226,18 @@ def main(args):
             plt.imsave(out_depth_path, new_depth, cmap="viridis")
             np.save(str(out_depth_path).replace(".png", ".npy"), new_depth)
 
-            frame["sensor_depth_path"] = rgb_path.replace("_rgb.png", "_sensor_depth.npy")
+            frame["sensor_depth_path"] = rgb_path.replace(
+                "_rgb.png", "_sensor_depth.npy")
 
         if args.mono_prior:
-            frame["mono_depth_path"] = rgb_path.replace("_rgb.png", "_depth.npy")
-            frame["mono_normal_path"] = rgb_path.replace("_rgb.png", "_normal.npy")
-            
+            frame["mono_depth_path"] = rgb_path.replace(
+                "_rgb.png", "_depth.npy")
+            frame["mono_normal_path"] = rgb_path.replace(
+                "_rgb.png", "_normal.npy")
+
         if args.foreground_mask:
-            frame["foreground_mask"] = rgb_path.replace("_rgb.png", "_foreground_mask.png")
+            frame["foreground_mask"] = rgb_path.replace(
+                "_rgb.png", "_foreground_mask.png")
 
         frames.append(frame)
         # out_index += 1
@@ -253,7 +260,8 @@ def main(args):
 
     # === Generate mono priors using omnidata ===
     if args.mono_prior:
-        assert os.path.exists(args.pretrained_models), "Pretrained model path not found"
+        assert os.path.exists(
+            args.pretrained_models), "Pretrained model path not found"
         assert os.path.exists(args.omnidata_path), "omnidata l path not found"
         # generate mono depth and normal
         print("Generating mono depth...")
@@ -280,9 +288,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="preprocess nerfstudio dataset to sdfstudio dataset, "
                                                  "currently support colmap and polycam")
 
-    parser.add_argument("--data", dest="input_dir", required=True, help="path to nerfstudio data directory")
-    parser.add_argument("--output-dir", dest="output_dir", required=True, help="path to output data directory")
-    parser.add_argument("--data-type", dest="data_type", required=True, choices=["colmap", "polycam"])
+    parser.add_argument("--data", dest="input_dir", required=True,
+                        help="path to nerfstudio data directory")
+    parser.add_argument("--output-dir", dest="output_dir",
+                        required=True, help="path to output data directory")
+    parser.add_argument("--data-type", dest="data_type",
+                        required=True, choices=["colmap", "polycam"])
     parser.add_argument("--scene-type", dest="scene_type", required=True, choices=["indoor", "object", "unbound"],
                         help="The scene will be normalized into a unit sphere when selecting indoor or object.")
     parser.add_argument("--scene-scale-mult", dest="scene_scale_mult", type=float, default=None,
